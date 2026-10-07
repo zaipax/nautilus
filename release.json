@@ -1,8 +1,8 @@
 {
-  "tag": "v0.2.3",
+  "tag": "v0.2.4",
   "files": {
-    "nautilus.exe": "1bcf5e38414f12c29cb563b2509a0b418446ab687097fb76837af38b3eb1398a",
+    "nautilus.exe": "e1514940c3ad2cdb282afa15b4c5cc066a08ce0a7b3f1ee9ea6a0ea60c3d708c",
     "START-MINING.bat": "ddc6730c82348f38ca115017ef6f3bdab82ff51fc13d1193e2ab8ad5559c65ac"
   },
-  "sha256": "15a3a2bcc881a55e67d36118247ea6f7cadd22b72bf32f7ab3ffbcd1749fb2e5"
+  "sha256": "df8bc3b12167f2a634d4a1bb8f555c349fc52421eb35b6380c0e22577a811a35"
 }

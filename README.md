@@ -2,7 +2,7 @@
 
 Native Windows x64 Pearl miner for NVIDIA RTX 20 / 30 / 40 / 50 series GPUs. Use a current NVIDIA driver.
 
-[Download v0.2.3](https://github.com/zaipax/nautilus/releases/tag/v0.2.3)
+[Download v0.2.4](https://github.com/zaipax/nautilus/releases/tag/v0.2.4)
 
 Extract the ZIP, edit your wallet and worker in START-MINING.bat, then double-click it. Press Ctrl+C to stop.
 
