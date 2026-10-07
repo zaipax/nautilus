@@ -43,6 +43,11 @@ jobs:
           $expectedFiles = @('FILES-SHA256.txt','nautilus.exe','README.txt','START-MINING.bat','THIRD-PARTY-NOTICES.txt') | Sort-Object
           $actualFiles = @(Get-ChildItem -LiteralPath $runtime -Recurse -File | ForEach-Object { $_.FullName.Substring($runtime.Length + 1) } | Sort-Object)
           if (Compare-Object $expectedFiles $actualFiles) { throw 'Package must contain exactly the five native release files' }
+          foreach ($document in @('README.md', "$folder/RELEASE-NOTES.md", "$runtime/README.txt", "$runtime/START-MINING.bat")) {
+            if ((Get-Content -LiteralPath $document -Raw) -match '[\u3400-\u9fff]') {
+              throw "Release documentation must be in English: $document"
+            }
+          }
           foreach ($line in Get-Content "$runtime/FILES-SHA256.txt") {
             $hash, $name = $line -split '  ', 2
             if ($name -match '(^/|\.\.|:)') { throw 'Invalid runtime path' }
@@ -86,6 +91,23 @@ jobs:
           $report += 'This check does not guarantee future antivirus or SmartScreen classifications.'
           $report | Set-Content "$folder/WINDOWS-VALIDATION.txt" -Encoding utf8
           Get-Content "$folder/WINDOWS-VALIDATION.txt"
+      - name: Synchronize English descriptions for earlier releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content release.json -Raw | ConvertFrom-Json
+          foreach ($tag in $manifest.release_note_updates) {
+            if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $tag -eq $env:RELEASE_TAG) {
+              throw 'Invalid historical release tag'
+            }
+            $notes = "releases/$tag/RELEASE-NOTES.md"
+            if (-not (Test-Path -LiteralPath $notes)) { throw "Missing release notes: $tag" }
+            if ((Get-Content -LiteralPath $notes -Raw) -match '[\u3400-\u9fff]') { throw "Release notes must be in English: $tag" }
+            gh release edit $tag --title "Nautilus $($tag.Substring(1)) - Windows x64" --notes-file $notes
+            if ($LASTEXITCODE) { throw "Release description update failed: $tag" }
+          }
       - name: Upload verified release assets and publish
         shell: pwsh
         env:

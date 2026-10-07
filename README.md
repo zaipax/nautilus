@@ -1,32 +1,29 @@
 # Nautilus
 
-Windows x64 原生矿工发布仓库。
+Native Windows x64 Pearl miner.
 
-[下载 v0.2.1 ZIP](https://github.com/zaipax/nautilus/releases/download/v0.2.1/nautilus-0.2.1-windows-x64.zip) · [版本说明与校验文件](https://github.com/zaipax/nautilus/releases/tag/v0.2.1)
+[Download v0.2.2 ZIP](https://github.com/zaipax/nautilus/releases/download/v0.2.2/nautilus-0.2.2-windows-x64.zip) · [Release notes and checksums](https://github.com/zaipax/nautilus/releases/tag/v0.2.2)
 
-v0.2.1 已将 v0.2.0 的 Python 打包主程序替换为 C++ 主程序。官方 Pearl Rust 证明库静态编入 EXE，CUDA 内核内嵌。**没有 Python、PYD、附带 DLL 或自解压加载器**。
+Version 0.2.2 prepares new pool jobs in the background to reduce GPU idle time during job changes. The release notes include measured results and remaining limitations.
 
-ZIP 约 1.6 MB，解压后仅有 5 个文件：
+The host program is C++20. The official Pearl Rust proof library is statically linked, and the verified CUDA kernels are embedded in the EXE. No Python interpreter, PYD, bundled DLLs or self-extracting loader are included.
 
-```text
-nautilus.exe                 原生程序，约 4.0 MB
-START-MINING.bat              双击启动
-README.txt                   使用说明
-THIRD-PARTY-NOTICES.txt       第三方许可
-FILES-SHA256.txt              文件校验清单
-```
+The ZIP contains exactly five files:
 
-完整解压，编辑 BAT 中的钱包和矿工名，再双击启动。无需安装 Python、CUDA Toolkit 或额外 VC 运行库。按 Ctrl+C 停止。
+- nautilus.exe — native executable.
+- START-MINING.bat — double-click launcher.
+- README.txt — usage instructions.
+- THIRD-PARTY-NOTICES.txt — dependency licenses.
+- FILES-SHA256.txt — per-file checksums.
 
-- 默认矿池：`68.183.184.25:3333`，Reef full-proof 协议。
-- 默认钱包：`prl1p3dgtgfxsggfw064la9wt5uqs9vx0mgzm2sdg99lrjemv895vt6ks6p2w3p`。请核对收款地址。
-- 当前仅包含 NVIDIA SM120 内核，实测 RTX 5060 Ti 16 GB，驱动 617.14；不承诺其它显卡或矿池兼容。
-- 默认 GPU 0、batch 16，持续挖矿，网络断线自动重连。
-- 10 分钟实测：本地完成工作量平均 **90.797 TH/s**；矿池接受 **10 份完整证明，0 拒绝**。
-- 本地 TH/s 为 `pearlhash_hps / 10^12`，与矿池短窗口的已接受 share 算力估计不同。
+Extract the entire ZIP, edit the wallet and worker name in START-MINING.bat, then double-click it. Press Ctrl+C to stop. Python, CUDA Toolkit, extra Visual C++ runtime packages and administrator privileges are not required.
 
-`nautilus.exe --help` 查看参数，`--self-test` 做 CPU 自检，`--validate` 校验 GPU。
+- Default pool: 68.183.184.25:3333, using the Reef full-proof protocol.
+- Default wallet: prl1p3dgtgfxsggfw064la9wt5uqs9vx0mgzm2sdg99lrjemv895vt6ks6p2w3p. Check your payout address before mining.
+- Platform: Windows 10/11 x64 and NVIDIA SM120. Verified on RTX 5060 Ti 16 GB, driver 617.14. Other GPU architectures and pool protocols are not supported by this build.
+- Defaults: GPU 0, batch 16, continuous mining with automatic reconnect.
+- Local TH/s means pearlhash_hps / 10^12. A pool estimate based on accepted shares uses a different measurement method and fluctuates over short intervals.
 
-不附项目源码和 PDB，不修改 Windows 防护设置，不需要管理员权限。
+Run nautilus.exe --help for options, --self-test for CPU checks, or --validate for GPU correctness checks.
 
-当前未做 Authenticode 签名；发布流程的 Defender 扫描结果见附件 `WINDOWS-VALIDATION.txt`。单次扫描不能保证其它安全软件或 SmartScreen 的判断。请校验 SHA256，疑似误报应提交厂商复核。
+The miner does not modify Windows protection settings, install services or change GPU clocks. It is currently unsigned. See WINDOWS-VALIDATION.txt attached to the release for the actual Defender scan result; a scan cannot guarantee future antivirus or SmartScreen classifications.

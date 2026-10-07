@@ -1,16 +1,16 @@
-Nautilus 0.2.0 Windows x64 发布版。完整解压 ZIP 后，编辑并双击 `START-MINING.bat` 即可挖矿，无需安装 Python 或 CUDA Toolkit。
+Nautilus 0.2.0 for Windows x64. This historical release packages the Python-based validation host with its runtime dependencies. It has been superseded by the native C++ releases.
 
-- 默认矿池：`68.183.184.25:3333`，Reef full-proof 协议。
-- 默认钱包：`prl1p3dgtgfxsggfw064la9wt5uqs9vx0mgzm2sdg99lrjemv895vt6ks6p2w3p`。
-- 保留最佳 TMA 内核，默认 batch 16；断线重连、Ctrl+C 停止、日志按会话保留。
-- 主程序采用原生编译保护，CUDA 内核发布 cubin，不附项目源码或 PDB。
+Extract the complete ZIP, edit START-MINING.bat and double-click it. A separate Python or CUDA Toolkit installation is not required.
 
-**硬件范围：** Windows 10/11 x64，NVIDIA SM120；实测 RTX 5060 Ti 16 GB、驱动 617.14。使用 GPU 0，仅验证 Reef full-proof 矿池协议。
+- Default pool: 68.183.184.25:3333, Reef full-proof protocol.
+- Default wallet: prl1p3dgtgfxsggfw064la9wt5uqs9vx0mgzm2sdg99lrjemv895vt6ks6p2w3p.
+- Retained TMA kernel, batch 16, automatic reconnect, Ctrl+C shutdown and bounded session logs.
+- Windows 10/11 x64, NVIDIA SM120. Verified on RTX 5060 Ti 16 GB, driver 617.14, GPU 0.
 
-**实测：** 当前桌面负载下运行 600.125 秒，本地完成搜索量平均 **91.215 TH/s**；矿池接受 **6 份有效证明，0 拒绝**，服务端回查有效 share ID 301–306。另有 2 个候选因任务过时在本地丢弃。48 项测试通过，解压包的文件哈希、BAT 和独立运行入口通过检查。
+A 600.125-second run under the existing desktop load averaged **91.215 TH/s of locally completed work**, with **6 accepted full proofs and 0 rejected**. Pool receipts are share IDs 301–306. Two obsolete candidates/proofs were discarded locally. The release passed 48 tests, file checksums, launcher checks and extraction tests.
 
-本地 TH/s 采用 `pearlhash_hps` 口径。该 10 分钟窗口的 6 份 share 换算为约 45.03 TH/s 的已接受工作量估计，样本很少、波动很大；这两个统计口径不能混用，本次结果不代表长期矿池平均算力。
+The six-share estimate was approximately **45.03 TH/s** for this short window, with substantial statistical variance. It is a different measurement from local completed-work rate and is not evidence of sustained pool performance.
 
-**Windows 安全：** 普通展开目录，无 UPX 或自解压壳，不修改系统防护、不添加排除项、不安装服务或开机启动。本版本未做 Authenticode 签名，不能保证没有 SmartScreen 提醒或安全软件误报。构建机无法提供有效 Defender 扫描；发布流程的实际 Windows 检查结果见附件 `WINDOWS-VALIDATION.txt`。不要关闭防护来运行，疑似误报应向安全厂商申请复核。
+The package uses an ordinary extracted directory, without UPX or a self-extracting loader. It does not modify system protection, add exclusions, install a service or configure startup. It is unsigned. The actual Windows and Defender validation results are attached as WINDOWS-VALIDATION.txt; they do not guarantee future antivirus or SmartScreen classifications.
 
-下载后可用 `Get-FileHash .\nautilus-0.2.0-windows-x64.zip -Algorithm SHA256` 与附件 `SHA256SUMS.txt` 比较。压缩包内同时提供每个文件的校验清单、中文说明和第三方许可。
+Verify the ZIP using SHA256SUMS.txt. The archive includes per-file checksums and third-party licenses.
