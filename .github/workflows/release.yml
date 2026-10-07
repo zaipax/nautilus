@@ -3,14 +3,13 @@ name: Publish Windows release
 on:
   push:
     branches: ['main']
-    tags: ['v*']
     paths: ['release.json', '.github/workflows/release.yml']
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-windows
   cancel-in-progress: false
 
 jobs:
@@ -41,6 +40,9 @@ jobs:
           if ($actual -ne $expected[0]) { throw 'ZIP SHA256 mismatch' }
           Expand-Archive "$folder/$asset" -DestinationPath "$env:RUNNER_TEMP/nautilus-validation"
           $runtime = "$env:RUNNER_TEMP/nautilus-validation/nautilus-$version-windows-x64"
+          $expectedFiles = @('FILES-SHA256.txt','nautilus.exe','README.txt','START-MINING.bat','THIRD-PARTY-NOTICES.txt') | Sort-Object
+          $actualFiles = @(Get-ChildItem -LiteralPath $runtime -Recurse -File | ForEach-Object { $_.FullName.Substring($runtime.Length + 1) } | Sort-Object)
+          if (Compare-Object $expectedFiles $actualFiles) { throw 'Package must contain exactly the five native release files' }
           foreach ($line in Get-Content "$runtime/FILES-SHA256.txt") {
             $hash, $name = $line -split '  ', 2
             if ($name -match '(^/|\.\.|:)') { throw 'Invalid runtime path' }
@@ -52,12 +54,16 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Nautilus $version") { throw 'Version smoke test failed' }
           & "$runtime/nautilus.exe" --help | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'Help smoke test failed' }
+          & "$runtime/nautilus.exe" --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Native CPU protocol/cryptographic self-test failed' }
           $report = @(
             "Release: $env:RELEASE_TAG"
             "ZIP SHA256: $actual"
             "Windows runner: $env:ImageOS / $env:ImageVersion"
             'Archive and all runtime file checksums: passed'
             "Standalone version/help: passed ($versionOutput)"
+            'Native CPU protocol/cryptographic self-test: passed without a GPU'
+            'Package inventory: one EXE, one BAT, three text files; no bundled DLL/PYD/Python'
             'GPU/pool validation: performed separately on RTX 5060 Ti; see release notes'
             'Authenticode: unsigned'
           )
@@ -75,7 +81,7 @@ jobs:
             if ($scanExit -ne 0) { throw "Defender reported a detection or scan error (exit $scanExit); publication stopped" }
             $report += 'Defender scan: completed with no detection reported by this scan'
           } else {
-            $report += 'Defender scan: unavailable on this runner; no clean-scan claim is made'
+            throw 'Active Defender signatures unavailable; publication stopped'
           }
           $report += 'This check does not guarantee future antivirus or SmartScreen classifications.'
           $report | Set-Content "$folder/WINDOWS-VALIDATION.txt" -Encoding utf8
