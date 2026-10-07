@@ -24,106 +24,110 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Verify archive and standalone Windows CLI
+      - name: Verify two-file archive and standalone Windows CLI
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $env:RELEASE_TAG = (Get-Content release.json -Raw | ConvertFrom-Json).tag
+          $manifest = Get-Content release.json -Raw | ConvertFrom-Json
+          $env:RELEASE_TAG = $manifest.tag
           "RELEASE_TAG=$env:RELEASE_TAG" | Add-Content $env:GITHUB_ENV
           if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid release tag' }
           $version = $env:RELEASE_TAG.Substring(1)
           $folder = "releases/$env:RELEASE_TAG"
           $asset = "nautilus-$version-windows-x64.zip"
-          $expected = ((Get-Content "$folder/SHA256SUMS.txt" -Raw).Trim() -split '\s+')
-          if ($expected.Count -ne 2 -or $expected[1] -ne $asset) { throw 'Invalid checksum manifest' }
+          if ($manifest.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid ZIP checksum' }
           $actual = (Get-FileHash "$folder/$asset" -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected[0]) { throw 'ZIP SHA256 mismatch' }
+          if ($actual -ne $manifest.sha256) { throw 'ZIP SHA256 mismatch' }
+          $notes = Get-Content "$folder/RELEASE-NOTES.md" -Raw
+          if (-not $notes.Contains($actual)) { throw 'Release notes must contain the ZIP SHA256' }
           Expand-Archive "$folder/$asset" -DestinationPath "$env:RUNNER_TEMP/nautilus-validation"
           $runtime = "$env:RUNNER_TEMP/nautilus-validation/nautilus-$version-windows-x64"
-          $expectedFiles = @('FILES-SHA256.txt','nautilus.exe','README.txt','START-MINING.bat','THIRD-PARTY-NOTICES.txt') | Sort-Object
+          $expectedFiles = @('nautilus.exe','START-MINING.bat') | Sort-Object
           $actualFiles = @(Get-ChildItem -LiteralPath $runtime -Recurse -File | ForEach-Object { $_.FullName.Substring($runtime.Length + 1) } | Sort-Object)
-          if (Compare-Object $expectedFiles $actualFiles) { throw 'Package must contain exactly the five native release files' }
-          foreach ($document in @('README.md', "$folder/RELEASE-NOTES.md", "$runtime/README.txt", "$runtime/START-MINING.bat")) {
-            if ((Get-Content -LiteralPath $document -Raw) -match '[\u3400-\u9fff]') {
-              throw "Release documentation must be in English: $document"
-            }
-          }
-          foreach ($line in Get-Content "$runtime/FILES-SHA256.txt") {
-            $hash, $name = $line -split '  ', 2
-            if ($name -match '(^/|\.\.|:)') { throw 'Invalid runtime path' }
-            if ((Get-FileHash "$runtime/$name" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) {
+          if (Compare-Object $expectedFiles $actualFiles) { throw 'Package must contain only one EXE and one BAT' }
+          $manifestFiles = @($manifest.files.PSObject.Properties.Name | Sort-Object)
+          if (Compare-Object $expectedFiles $manifestFiles) { throw 'Invalid file checksum manifest' }
+          foreach ($name in $expectedFiles) {
+            $expectedHash = $manifest.files.$name
+            if ($expectedHash -notmatch '^[0-9a-f]{64}$' -or (Get-FileHash "$runtime/$name" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) {
               throw "Runtime checksum mismatch: $name"
             }
+          }
+          foreach ($document in @('README.md', "$folder/RELEASE-NOTES.md", "$runtime/START-MINING.bat")) {
+            if ((Get-Content -LiteralPath $document -Raw) -match '[\u3400-\u9fff]') { throw "Release text must be English: $document" }
           }
           $versionOutput = (& "$runtime/nautilus.exe" --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Nautilus $version") { throw 'Version smoke test failed' }
           & "$runtime/nautilus.exe" --help | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'Help smoke test failed' }
+          $licenses = & "$runtime/nautilus.exe" --licenses | Out-String
+          if ($LASTEXITCODE -ne 0 -or -not $licenses.Contains("Nautilus $version third-party notices")) { throw 'Embedded license check failed' }
           & "$runtime/nautilus.exe" --self-test
-          if ($LASTEXITCODE -ne 0) { throw 'Native CPU protocol/cryptographic self-test failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Native CPU self-test failed' }
           $report = @(
             "Release: $env:RELEASE_TAG"
             "ZIP SHA256: $actual"
             "Windows runner: $env:ImageOS / $env:ImageVersion"
-            'Archive and all runtime file checksums: passed'
-            "Standalone version/help: passed ($versionOutput)"
-            'Native CPU protocol/cryptographic self-test: passed without a GPU'
-            'Package inventory: one EXE, one BAT, three text files; no bundled DLL/PYD/Python'
-            'GPU/pool validation: performed separately on RTX 5060 Ti; see release notes'
+            'Archive and runtime file checksums: passed'
+            'Standalone version/help, embedded licenses and CPU self-test: passed'
+            'Package inventory: one EXE and one BAT'
             'Authenticode: unsigned'
           )
           $defender = Get-MpComputerStatus -ErrorAction SilentlyContinue
           if ($defender -and $defender.AntivirusEnabled -and $defender.AntivirusSignatureVersion) {
             $scanner = Get-ChildItem "$env:ProgramData/Microsoft/Windows Defender/Platform/*/MpCmdRun.exe" |
               Sort-Object FullName -Descending | Select-Object -First 1
-            if (-not $scanner) { throw 'Defender enabled but scanner unavailable' }
+            if (-not $scanner) { throw 'Defender scanner unavailable' }
             $report += "Defender signatures: $($defender.AntivirusSignatureVersion)"
             & $scanner.FullName -Scan -ScanType 3 -File $runtime -DisableRemediation 2>&1 |
               Tee-Object -Variable scanOutput | Write-Host
             $scanExit = $LASTEXITCODE
             $report += "Defender custom scan exit: $scanExit"
             $report += ($scanOutput | Out-String)
-            if ($scanExit -ne 0) { throw "Defender reported a detection or scan error (exit $scanExit); publication stopped" }
-            $report += 'Defender scan: completed with no detection reported by this scan'
+            if ($scanExit -ne 0) { throw "Defender detection or scan error (exit $scanExit); publication stopped" }
           } else {
             throw 'Active Defender signatures unavailable; publication stopped'
           }
-          $report += 'This check does not guarantee future antivirus or SmartScreen classifications.'
-          $report | Set-Content "$folder/WINDOWS-VALIDATION.txt" -Encoding utf8
-          Get-Content "$folder/WINDOWS-VALIDATION.txt"
-      - name: Synchronize English descriptions for earlier releases
+          $report | Set-Content "$env:RUNNER_TEMP/WINDOWS-VALIDATION.txt" -Encoding utf8
+          $report | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content "$env:RUNNER_TEMP/WINDOWS-VALIDATION.txt"
+      - name: Publish ZIP and concise release notes
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $manifest = Get-Content release.json -Raw | ConvertFrom-Json
-          foreach ($tag in $manifest.release_note_updates) {
-            if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $tag -eq $env:RELEASE_TAG) {
-              throw 'Invalid historical release tag'
-            }
-            $notes = "releases/$tag/RELEASE-NOTES.md"
-            if (-not (Test-Path -LiteralPath $notes)) { throw "Missing release notes: $tag" }
-            if ((Get-Content -LiteralPath $notes -Raw) -match '[\u3400-\u9fff]') { throw "Release notes must be in English: $tag" }
-            gh release edit $tag --title "Nautilus $($tag.Substring(1)) - Windows x64" --notes-file $notes
-            if ($LASTEXITCODE) { throw "Release description update failed: $tag" }
-          }
-      - name: Upload verified release assets and publish
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
           $folder = "releases/$env:RELEASE_TAG"
           $version = $env:RELEASE_TAG.Substring(1)
-          $existing = gh release view $env:RELEASE_TAG --json isDraft 2>$null
+          $asset = "nautilus-$version-windows-x64.zip"
+          $existing = gh release view $env:RELEASE_TAG --json isDraft,assets 2>$null
           if ($LASTEXITCODE -eq 0) {
-            if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Release already published; refusing to overwrite' }
+            $release = $existing | ConvertFrom-Json
+            if (-not $release.isDraft) {
+              if ($manifest.replace_asset_sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Published release replacement is not configured' }
+              $remote = gh api "repos/$env:GH_REPO/releases/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+              if ($LASTEXITCODE) { throw 'Cannot inspect published assets' }
+              $current = @($remote.assets | Where-Object name -eq $asset)
+              if ($current.Count -ne 1 -or $current[0].digest -notin @("sha256:$($manifest.replace_asset_sha256)", "sha256:$($manifest.sha256)")) {
+                throw 'Published ZIP changed unexpectedly; replacement stopped'
+              }
+            }
           } else {
             gh release create $env:RELEASE_TAG --verify-tag --draft --title "Nautilus $version - Windows x64" --notes-file "$folder/RELEASE-NOTES.md"
             if ($LASTEXITCODE) { throw 'Release creation failed' }
           }
-          gh release upload $env:RELEASE_TAG "$folder/nautilus-$version-windows-x64.zip" "$folder/SHA256SUMS.txt" "$folder/WINDOWS-VALIDATION.txt" --clobber
-          if ($LASTEXITCODE) { throw 'Asset upload failed' }
-          gh release edit $env:RELEASE_TAG --draft=false --latest
-          if ($LASTEXITCODE) { throw 'Publication failed' }
+          gh release upload $env:RELEASE_TAG "$folder/$asset" --clobber
+          if ($LASTEXITCODE) { throw 'ZIP upload failed' }
+          gh release edit $env:RELEASE_TAG --draft=false --latest --title "Nautilus $version - Windows x64" --notes-file "$folder/RELEASE-NOTES.md"
+          if ($LASTEXITCODE) { throw 'Release update failed' }
+          $remote = gh api "repos/$env:GH_REPO/releases/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          if ($LASTEXITCODE) { throw 'Cannot verify published assets' }
+          $current = @($remote.assets | Where-Object name -eq $asset)
+          if ($current.Count -ne 1 -or $current[0].digest -ne "sha256:$($manifest.sha256)") { throw 'Published ZIP checksum mismatch' }
+          foreach ($name in @('SHA256SUMS.txt','WINDOWS-VALIDATION.txt')) {
+            if ($remote.assets.name -contains $name) {
+              gh release delete-asset $env:RELEASE_TAG $name --yes
+              if ($LASTEXITCODE) { throw "Old attachment removal failed: $name" }
+            }
+          }
